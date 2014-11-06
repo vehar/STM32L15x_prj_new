@@ -26,9 +26,19 @@
 #include "icc_measure.h"
 #include "discover_functions.h"
 
+#include <Cust_encoder.h>
+#include <Cust_MatrKeypad.h>
+    
+#include "CustADC.h"
+#include "CustI2C.h"
+#include "CustGps.h"    
+
 #define DEBUG
 
- //Private variables ---------------------------------------------------------*/
+
+/* Private variables ---------------------------------------------------------*/
+bool majorInterrupt = false;
+/*******************************************************************************/
 
 static volatile uint32_t TimingDelay;
 extern unsigned char Bias_Current;     //Bias Current stored in EІProm used for ICC mesurement precision 
@@ -49,13 +59,13 @@ void All_init(void)
  //Timer2_init_vs_irq(); //ovr_irq
 
 /******Btn`s init_section******/  
-    //Init_GPIOs();    //Init leds, user btn, enc btn
+    Init_GPIOs();    //Init leds, user btn, enc btn
 
  Button_init_vs_irq();   
  Matrix_kbd_init();
  
 /****Encoder init_section****/    
- //encoder_init(); 
+ encoder_init(); 
  
 /****Interface init_section****/  
  Usart_init_vs_irq ();
@@ -80,43 +90,15 @@ void Debug_section(void){
  //send_data = 0x05;
  
   send_str_u("===STM_GO!===\n");
- //button_port = GPIOC->IDR;  
-//send_to_usart(button_port>>8);
  
-//GPIOB->ODR |= GPIO_OTYPER_ODR_6;	// установка бита 6 порта B (blue)
-//GPIOB->ODR |= GPIO_OTYPER_ODR_7;	// установка бита 7 порта B  (green)
-//button_port = GPIOC->IDR;  
-//send_to_usart(button_port>>8);
-//GPIOB->ODR &= ~(GPIO_OTYPER_ODR_7);	// сброс бита 7 порта B
-//=
-//GPIOB->BSRRH |= GPIO_BSRR_BS_7;   
-//button_port = GPIOC->IDR; send_to_usart(button_port>>8);
- //PIN_ON(LED_GREEN); 
- //PIN_OFF(LED_GREEN) ;
- //PIN_SIGNAL(LED_GREEN) ;
  
-//Get_key();
+Get_key();
 
 //*************************************//
 //**********Debug section***************/  
 }
 
 
-uint8_t Encoder_proc (void)
-{
-static uint8_t Encoder_prev_pos;
-static uint8_t Encoder_curr_pos;
-
-   // Encoder_curr_pos = (TIM3->CNT & 254)>>1; //get encoder data (1 byte, div 2)
-      Encoder_curr_pos = TIM3->CNT>>1 ; //get encoder data (1 byte, div 2)
-   if(Encoder_curr_pos != Encoder_prev_pos)
-   {
-     //send_str_u("ENC");
-     Encoder_prev_pos = Encoder_curr_pos;   
-      return   Encoder_curr_pos;
-   }
- return 0;
-}
 
 
 char out_data_t = 0; //tmp debug
@@ -172,7 +154,7 @@ int main(void)
     send_to_usart(OutData.encoder_state); //debug 
     send_to_usart(OutData.btn_state); //debug 
     OutData.flags |= OUT_DATA_SENDED; //отправлено, можно очищать буффер!
-  }
+  }  
    
 
 //button_port = GPIOC->IDR;  
@@ -402,13 +384,13 @@ NVIC_EnableIRQ (EXTI9_5_IRQn);
   
 #ifdef DEBUG  
    //Configure the LED_pin as output push-pull for LD3 & LD4 usage
-  /*GPIO_InitStructure.GPIO_Pin = LD_GREEN_GPIO_PIN | LD_BLUE_GPIO_PIN;
+  GPIO_InitStructure.GPIO_Pin = LD_GREEN_GPIO_PIN | LD_BLUE_GPIO_PIN;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_Init(LD_GPIO_PORT, &GPIO_InitStructure); 
- */  //Force a low level on LEDs*/ 
+   //Force a low level on LEDs*/ 
  // GPIO_LOW(LD_GPIO_PORT,LD_GREEN_GPIO_PIN);	
  // GPIO_LOW(LD_GPIO_PORT,LD_BLUE_GPIO_PIN);
 #endif 
@@ -457,47 +439,7 @@ NVIC_EnableIRQ (EXTI9_5_IRQn);
   */
 }  
 
-/**
-  * @brief  Inserts a delay time.
-  * @param  nTime: specifies the delay time length, in 10 ms.
-  * @retval None
-*/  
-void Delay(uint32_t nTime)
-{
-  TimingDelay = nTime;
-  while(TimingDelay != 0); 
-}
 
-/**
-  * @brief  Decrements the TimingDelay variable.
-  * @caller SysTick interrupt Handler 
-  * @param  None
-  * @retval None
-*/  
-void TimingDelay_Decrement(void)
-{
-  if (TimingDelay != 0x00)
-    TimingDelay--;
-}
-
-#ifdef  USE_FULL_ASSERT
-
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-*/  
-void assert_failed(uint8_t* file, uint32_t line)
-{ 
-   //User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) ;
-   //Infinite loop 
-  while (1);
-}
-
-#endif
 
 /******************* (C) COPYRIGHT 2011 STMicroelectronics *****END OF FILE****/
 
@@ -530,38 +472,6 @@ void Timer2_init_vs_irq(void){
     NVIC_EnableIRQ(TIM2_IRQn);  // Enable IRQ 
 }
 
-void Timer3_init_encoder_mode(void) //TODO add filter
-{
-       RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //enable gpioA    
-       RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;  // Enable TIM3 Periph clock //?
-     
-     //С детектора фронтов возьмем не инверсный, т.е. активный уровень высокий (для первого и второго входа)
-     TIM3->CCER |= TIM_CCER_CC1P | TIM_CCER_CC2P;//--
-     //Настраиваем второй мультиплексор (для первого и второго входа):
-     TIM3->CCMR1 = TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_0;//--      
-      
-    TIM3->PSC = 2; 
-    TIM3->ARR = 255;  //RELOAD AFTER ...
-    
-   // TIM3->SMCR |= TIM_SMCR_TS_2; //?
-      TIM3->SMCR |= TIM_SMCR_SMS_0 | TIM_SMCR_SMS_1;  /*!<SMS[2:0] bits (Slave mode selection) */ //1 КАНАЛ=+2, 2 КАНАЛА=+4;
-      TIM3->SMCR |= TIM_SMCR_TS_2;// | TIM_SMCR_TS_0; //Select the timer TIx as the trigger input source by writing TS bits in the TIMx_SMCR register
-   // TIM3->SMCR |= TIM_SMCR_ETF_2; //filter
-      
-    TIM3->CR1 |= TIM_CR1_CEN;   // Start count   
-    
-    //TIM3->DIER |= TIM_DIER_UIE; // Enable tim3 Update interrupt
-    //NVIC_EnableIRQ(TIM3_IRQn);  // Enable IRQ 
-}
-
-void encoder_init(void)
-{  
-PIN_CONFIGURATION(ENCODER_BUTTON); // кнопка
-PIN_CONFIGURATION(ENCODER_CH1);
-PIN_CONFIGURATION(ENCODER_CH2);
-
- Timer3_init_encoder_mode(); // encoder
-}
 
 void Button_init_vs_irq (void){
    RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //enable gpioA
@@ -583,125 +493,9 @@ void Button_init_vs_irq (void){
 }
 
 
-void Encoder_btn_init_vs_irq (void){
-   RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //enable gpioA
-   RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;  /*!< System Configuration SYSCFG clock enable */
-   //GPIOA->PUPDR |=  GPIO_PUPDR_PUPDR0_1; //BUTTON F in - pull down   
-    GPIOA->PUPDR |=  GPIO_PUPDR_PUPDR5_1; //BUTTON  in - pull down
-    EXTI->EMR |= EXTI_EMR_MR5 ;// PIN 5
-    EXTI->IMR |= EXTI_IMR_MR5; //для выводf 5
-    EXTI->FTSR|= EXTI_FTSR_TR5;//конфигурация - по падающему фронту
-   ///SYSCFG->EXTICR[0] |= SYSCFG_EXTICR1_EXTI0_PA; // Connect EXTI line 0 to PA.0//?
-  /// RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN; 
-   NVIC_EnableIRQ(EXTI0_IRQn); // Enable IRQn
-}
-
-
-
-void Matrix_kbd_init (void){
-///////////////////////////////////
-///////Port configuration//////////
-   RCC->AHBENR  |= RCC_AHBENR_GPIOCEN; //enable gpioC
-   /*?*/ RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;  /*!< System Configuration SYSCFG clock enable */
- PIN_CONFIGURATION(IN_1); 
- PIN_CONFIGURATION(IN_2);
- PIN_CONFIGURATION(IN_3);
- PIN_CONFIGURATION(IN_4);
- PIN_CONFIGURATION(IN_5);
- PIN_CONFIGURATION(IN_6);
-
-PIN_CONFIGURATION(OUT_1); 
-PIN_CONFIGURATION(OUT_2);  
-///////Port configuration//////////
-///////////////////////////////////
-}
-
-char Get_key(void)
-{
-  char key = 0;
-  PIN_ON(OUT_1); //in open-drain mode = Hi-Z !
-  PIN_ON(OUT_2);
-  
-   // for(char i=0; i<2; i++)
-   // {
-  if(key==0)
-{ 
-    PIN_ON(OUT_1);  //Hi-Z
-    PIN_OFF(OUT_2); //open-drain
-    button_port = GPIOC->IDR;
-    button_port =~button_port;
-    button_port &= (uint16_t)0x003F; //select key bits
-        switch(button_port)
-        {
-                case 1: 
-            key = 1;
-            break;
-                case 2: 
-            key = 2;
-            break;
-                case 4: 
-            key = 3;
-            break;
-                case 8: 
-            key = 4;
-            break;
-                case 16: 
-            key = 5;
-            break;
-                case 32: 
-            key = 6;
-            break;
-            default : key = 0;
-     }
-}
-if(key==0)
-{ 
-    PIN_ON(OUT_2);
-    PIN_OFF(OUT_1);    
-    button_port = GPIOC->IDR;
-    button_port =~button_port;
-    button_port &= (uint16_t)0x003F; //select key bits
-        switch(button_port)
-        {
-                case 1: 
-            key = 7;
-            break;
-                case 2: 
-            key = 8;
-            break;
-                case 4: 
-            key = 9; //
-            break;
-                case 8: 
-            key = 10; //
-            break;
-                case 16: 
-            key = 11; //
-            break;
-                case 32: 
-            key = 12; //
-            break;
-            default : key = 0;
-     }
- }   
-//} 
-        
- PIN_ON(OUT_1); //in open-drain mode = Hi-Z !
- PIN_ON(OUT_2);
-
- if(key)
- {
-   //SPI2->DR = key; //To DM
-   //send_to_usart(key); //debug OutData
-   return key;
- }; 
-return 0;
-}
-
 //////////////
 
-#define VERSION "1.0"
-#define DATE "03.09.13"
+
 
 void Info(){
 send_str_u(VERSION);  
@@ -721,55 +515,6 @@ send_str_u((uint8_t *) &gpsData);
 
 
 //160521.109,0000.0000,N,00000.0000,E
-
-
-bool ParseGpsData()
-{
-	bool result = 0;
-	uint16_t index = 0, coin = 0;//coincendence
-
-        
-     //for debug
-        strcpy(UsartRxBuffer, "$GPGGA,160521.109,0000.0000,N,00000.0000,E");
-        
-	for(;index < USART_RX_BUFF_SIZE;index++)
-	{
-                //if(index == RXBUFFERSIZE/2) CustWDReset();
-              //  if(majorInterrupt) return 0;
-		if((UsartRxBuffer[index]=='$')&&(coin==0)) {coin++; continue;}
-		if((UsartRxBuffer[index]=='G')&&(coin==1)) {coin++; continue;}
-		if((UsartRxBuffer[index]=='P')&&(coin==2)) {coin++; continue;}
-		if((UsartRxBuffer[index]=='G')&&(coin==3)) {coin++; continue;}
-		if((UsartRxBuffer[index]=='G')&&(coin==4)) {coin++; continue;}
-		if((UsartRxBuffer[index]=='A')&&(coin==5)) {coin++; continue;}
-		if((UsartRxBuffer[index]==',')&&(coin==6))
-		{
-                     //   SetGpsFlag(GPS_CONNECTED_FLAG);
-			index++;
-			if(index + 34 < USART_RX_BUFF_SIZE)
-			{
-				int j;
-				for(j=0; j<10; j++)
-					gpsData.time[j] = UsartRxBuffer[index++];
-				gpsData.time[j] = 0;
-				index++;
-				for(j=0; j<11; j++)
-					gpsData.latid[j] = UsartRxBuffer[index++];
-				gpsData.latid[j] = 0;
-				index++;
-				for(j=0; j<12; j++)
-					gpsData.longit[j] = UsartRxBuffer[index++];
-				gpsData.longit[j] = 0;
- 				result = 1;
-			}
-			coin = 0;
-			break;
-		}
-		coin = 0;
-	}
-	return result;
-}
-
 
 
 
@@ -1344,7 +1089,8 @@ void EXTI0_IRQHandler(void)
           }
 }
 */
- 
+uint16_t debug_spi_t = 1; 
+
  void EXTI0_IRQHandler(void)
 {
   /* Disable general interrupts */
@@ -1354,6 +1100,7 @@ void EXTI0_IRQHandler(void)
   if (!UserButton)
   {
     UserButtonHandler();
+    SPI1->DR = debug_spi_t*2;//debug
   }
   else 
   {
@@ -1473,8 +1220,7 @@ void SPI2_IRQHandler (void)
   if( SPI2->SR & SPI_SR_RXNE){ // (RXNE =1 - приемный буфер содержит данные))
   
        //  GPIOB->BSRRH |= GPIO_BSRR_BS_6;   //RESet PB6 bit
-    
-    
+        
     temp = SPI2->DR;//Считываем данные из приемного буфера SPI2. При этой операции происходит очистка буфера и сброс флага RXNE
    // send_to_usart(temp); //?/??    
     USART1->DR = temp; 
@@ -1490,12 +1236,6 @@ void SPI2_IRQHandler (void)
 }
 
 
-void I2C1_EV_IRQHandler (void){
-   send_str_u("i2c1_IRQ");
-    
-}
-
-
 void ADC1_IRQHandler (void){
   if(ADC1->SR & ADC_SR_EOC) { /*!< End of conversion */
     ADC_data=ADC1->DR;
@@ -1504,6 +1244,10 @@ void ADC1_IRQHandler (void){
    send_to_usart(ADC_data);
    }
 }
+
+/* In CustI2C
+void I2C1_EV_IRQHandler (void){}*/
+
 
 ///////////////////////////////////////////////////////
 
@@ -1572,3 +1316,44 @@ void Enc_Init_3ver(void)
 }*/
 
 
+/**
+  * @brief  Inserts a delay time.
+  * @param  nTime: specifies the delay time length, in 10 ms.
+  * @retval None
+*/  
+void Delay(uint32_t nTime)
+{
+  TimingDelay = nTime;
+  while(TimingDelay != 0); 
+}
+
+/**
+  * @brief  Decrements the TimingDelay variable.
+  * @caller SysTick interrupt Handler 
+  * @param  None
+  * @retval None
+*/  
+void TimingDelay_Decrement(void)
+{
+  if (TimingDelay != 0x00)
+    TimingDelay--;
+}
+
+#ifdef  USE_FULL_ASSERT
+
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+*/  
+void assert_failed(uint8_t* file, uint32_t line)
+{ 
+   //User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) ;
+   //Infinite loop 
+  while (1);
+}
+
+#endif

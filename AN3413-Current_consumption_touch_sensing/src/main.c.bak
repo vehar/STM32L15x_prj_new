@@ -46,28 +46,25 @@ void All_init(void)
     SystemInit();
     //HSI_on_16MHz(); 
     All_clk_On(); 
- Timer2_init_vs_irq(); //ovr_irq
+ //Timer2_init_vs_irq(); //ovr_irq
 
 /******Btn`s init_section******/  
-    Init_GPIOs();    //Init leds, user btn, enc btn
+    //Init_GPIOs();    //Init leds, user btn, enc btn
 
- //Button_init_vs_irq();   
+ Button_init_vs_irq();   
  Matrix_kbd_init();
  
 /****Encoder init_section****/    
- encoder_init(); //проверить, считает ли импульсы!
+ //encoder_init(); 
  
 /****Interface init_section****/  
  Usart_init_vs_irq ();
- Spi2_init_vs_irq  ();
+ Spi2_init_vs_irq  (); //2- slave, 1- mstr
  
  ///i2c1_init();///i2c1_rx(0xA0);
    //ADC_Icc_Init();   //Initializes ADC 
- //ADC_init();
+ ADC_init();
 
-  
-///
-   
   enableInterrupts();	   //Enable General interrupts 
 } 
 
@@ -83,42 +80,42 @@ void Debug_section(void){
  //send_data = 0x05;
  
   send_str_u("===STM_GO!===\n");
- button_port = GPIOC->IDR;  
-send_to_usart(button_port>>8);
+ //button_port = GPIOC->IDR;  
+//send_to_usart(button_port>>8);
  
- 
-GPIOB->ODR |= GPIO_OTYPER_ODR_6;	// установка бита 6 порта B (blue)
-GPIOB->ODR |= GPIO_OTYPER_ODR_7;	// установка бита 7 порта B  (green)
-
-button_port = GPIOC->IDR;  
-send_to_usart(button_port>>8);
-
-
-GPIOB->ODR &= ~(GPIO_OTYPER_ODR_7);	// сброс бита 7 порта B
+//GPIOB->ODR |= GPIO_OTYPER_ODR_6;	// установка бита 6 порта B (blue)
+//GPIOB->ODR |= GPIO_OTYPER_ODR_7;	// установка бита 7 порта B  (green)
+//button_port = GPIOC->IDR;  
+//send_to_usart(button_port>>8);
+//GPIOB->ODR &= ~(GPIO_OTYPER_ODR_7);	// сброс бита 7 порта B
 //=
-GPIOB->BSRRH |= GPIO_BSRR_BS_7;   
-
-button_port = GPIOC->IDR; send_to_usart(button_port>>8);
-
- PIN_ON(LED_GREEN); 
- PIN_OFF(LED_GREEN) ;
+//GPIOB->BSRRH |= GPIO_BSRR_BS_7;   
+//button_port = GPIOC->IDR; send_to_usart(button_port>>8);
+ //PIN_ON(LED_GREEN); 
+ //PIN_OFF(LED_GREEN) ;
  //PIN_SIGNAL(LED_GREEN) ;
  
-Get_key();
+//Get_key();
 
 //*************************************//
 //**********Debug section***************/  
 }
 
-void Encoder_proc (void){
-    Encoder_curr_pos = (TIM3->CNT & 254)>>1; //get encoder data (1 byte, div 2)
+
+uint8_t Encoder_proc (void)
+{
+static uint8_t Encoder_prev_pos;
+static uint8_t Encoder_curr_pos;
+
+   // Encoder_curr_pos = (TIM3->CNT & 254)>>1; //get encoder data (1 byte, div 2)
+      Encoder_curr_pos = TIM3->CNT>>1 ; //get encoder data (1 byte, div 2)
    if(Encoder_curr_pos != Encoder_prev_pos)
    {
-     send_str_u("ENC");
-     send_to_usart(Encoder_curr_pos);
-     SPI2->DR = Encoder_curr_pos; //Пишем в буфер передатчика SPI2 
-     Encoder_prev_pos = Encoder_curr_pos;     
+     //send_str_u("ENC");
+     Encoder_prev_pos = Encoder_curr_pos;   
+      return   Encoder_curr_pos;
    }
+ return 0;
 }
 
 
@@ -147,6 +144,7 @@ int main(void)
  
  //////////////////////////////////////////////////////////////////////////////////
  ///////////////////////On-StartTestSection_start////////////////////////////////// 
+ 
   RCC_Configuration();   //Configure Clocks for Application need 
   PWR_VoltageScalingConfig(PWR_VoltageScaling_Range1);    //Set internal voltage regulator to 1.8V 
   while (PWR_GetFlagStatus(PWR_FLAG_VOS) != RESET) ;   //Wait Until the Voltage Regulator is ready 
@@ -163,26 +161,27 @@ int main(void)
   while (1)
   {
     
-   Encoder_proc();
- //SPI2->DR = Encoder_curr_pos; //Пишем в буфер передатчика SPI2 
- //send_to_usart(Encoder_curr_pos); //debug
+  OutData.encoder_state = Encoder_proc();
+  OutData.btn_state |= Get_key();
  
- out_data_t = Get_key();
- //SPI2->DR = out_data_t; //To DM
- //send_to_usart(out_data_t); //debug 
-
-
-//SPI1->DR = out_data_t;
-
-       
+  if((OutData.encoder_state)||(OutData.btn_state))
+  {
+    OutData.flags |= ANY_DATA; //есть, что отправить
+    SPI2->DR = OutData.encoder_state; //To DM
+    SPI2->DR = OutData.btn_state; //To DM
+    send_to_usart(OutData.encoder_state); //debug 
+    send_to_usart(OutData.btn_state); //debug 
+    OutData.flags |= OUT_DATA_SENDED; //отправлено, можно очищать буффер!
+  }
+   
 
 //button_port = GPIOC->IDR;  
 //send_to_usart(button_port>>8);
  
   
     ///////////////////////////////////////////////////////--------------------
-          /*Вызов функции обмена данными.
-    В качестве аргумента поочередно передаются значения 0x01 или 0x03*/
+     //Вызов функции обмена данными.
+    //В качестве аргумента поочередно передаются значения 0x01 или 0x03
  
        //spi_exchange(send_data); 
     //SPI2->DR = Encoder_curr_pos; //Пишем в буфер передатчика SPI2 
@@ -195,8 +194,8 @@ int main(void)
       и меняем значение аргумента, передаваемого функции обмена данными
       при следующем вызове на 0x03*/
     case 0x01:
-      GPIOB->BSRRH |= GPIO_BSRR_BS_7;
-      GPIOB->BSRRL |= GPIO_BSRR_BS_6;
+      //GPIOB->BSRRH |= GPIO_BSRR_BS_7;
+      //GPIOB->BSRRL |= GPIO_BSRR_BS_6;
       send_str_u("SPI=01");
       send_data = 0x03;
       break;
@@ -204,18 +203,19 @@ int main(void)
       и меняем значение аргумента, передаваемого функции обмена данными
       при следующем вызове на 0x01*/
     case 0x03:
-      GPIOB->BSRRH |= GPIO_BSRR_BS_6;
-      GPIOB->BSRRL |= GPIO_BSRR_BS_7;
+      //GPIOB->BSRRH |= GPIO_BSRR_BS_6;
+      //GPIOB->BSRRL |= GPIO_BSRR_BS_7;
        send_str_u("SPI=03");
       send_data = 0x01;
       break;     
-     default :  GPIOB->BSRRH |= GPIO_BSRR_BS_7;
+     default :  //GPIOB->BSRRH |= GPIO_BSRR_BS_7;
     }
     //////////////////////////////////////////////////////////////-------------------
 //delay(1000);
 
-  delay(10000); //+0 
-  
+#ifdef DEBUG  
+  delay(100000); //+0 
+#endif  
   //send_to_usart(temp);
  //   if (USART1->SR & USART_SR_RXNE) {usart_data=USART1->DR;  
   //switch(usart_data)  {
@@ -233,7 +233,7 @@ int main(void)
        Current_monitor_get_data();
        break;     
     case '5':
-        ADC_measure(11);  /*!< Start Conversion of regular channels */
+        SET(ADC_start_flag);  /*!< Start Conversion of regular channels */
        break;
     case '6':
         send_str_u("===HELLO_FROM_USART!===");
@@ -262,20 +262,9 @@ int main(void)
 */ 
 
      //    }
-          /*
-        //обработка кнопки
-          if (GPIOA->IDR & GPIO_IDR_IDR_1){
-            delay(10000);
-              if (GPIOA->IDR & GPIO_IDR_IDR_1){
-                 delay(1000);
-          GPIOB->ODR &= ~GPIO_ODR_ODR_7  ;
-          GPIOB->ODR &= ~GPIO_ODR_ODR_6  ;
-                t^=1;  }}
-
-          */
           
-        //  if (A_flag){  GPIOB->ODR ^= GPIO_ODR_ODR_6  ;  } // 
-        //  RESET(A_flag);
+    //  if (A_flag){  GPIOB->ODR ^= GPIO_ODR_ODR_6  ;  } // 
+    //  RESET(A_flag);
          
          
 //flag state machine
@@ -299,6 +288,16 @@ int main(void)
        spi1_data=0;
        spi1_bit=0; //Сбрасываем счетчик
   } 
+ 
+ //if ((OutData.flags == ANY_DATA) && (OutData.flags == OUT_DATA_SENDED))
+  if (OutData.flags == (ANY_DATA + OUT_DATA_SENDED))
+ {   
+   OutData.flags = 0;
+   OutData.btn_state = 0;
+   OutData.encoder_state = 0;
+   OutData.current_state = 0;
+   OutData.voltage_state = 0;
+ }
     
   }//End While(1)
 } //End main()		
@@ -335,7 +334,7 @@ void RCC_Configuration(void)
 }
 
 
-inline void DeInit_GPIOs(void)
+ void DeInit_GPIOs(void)
 {
   GPIO_DeInit(GPIOA);
   GPIO_DeInit(GPIOB);
@@ -403,15 +402,15 @@ NVIC_EnableIRQ (EXTI9_5_IRQn);
   
 #ifdef DEBUG  
    //Configure the LED_pin as output push-pull for LD3 & LD4 usage
-  GPIO_InitStructure.GPIO_Pin = LD_GREEN_GPIO_PIN | LD_BLUE_GPIO_PIN;
+  /*GPIO_InitStructure.GPIO_Pin = LD_GREEN_GPIO_PIN | LD_BLUE_GPIO_PIN;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
   GPIO_Init(LD_GPIO_PORT, &GPIO_InitStructure); 
-   //Force a low level on LEDs*/ 
-  GPIO_LOW(LD_GPIO_PORT,LD_GREEN_GPIO_PIN);	
-  GPIO_LOW(LD_GPIO_PORT,LD_BLUE_GPIO_PIN);
+ */  //Force a low level on LEDs*/ 
+ // GPIO_LOW(LD_GPIO_PORT,LD_GREEN_GPIO_PIN);	
+ // GPIO_LOW(LD_GPIO_PORT,LD_BLUE_GPIO_PIN);
 #endif 
 /*    
  //Counter enable: GPIO set in output for enable the counter 
@@ -531,35 +530,33 @@ void Timer2_init_vs_irq(void){
     NVIC_EnableIRQ(TIM2_IRQn);  // Enable IRQ 
 }
 
-void Timer3_init_encoder_mode(void){
-    // RCC->AHBENR  |= RCC_AHBENR_GPIOBEN; //enable gpioB
-       RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //enable gpioA
-    // PIN_CONFIGURATION(ENCODER_CH1);
-    // PIN_CONFIGURATION(ENCODER_CH2);
+void Timer3_init_encoder_mode(void) //TODO add filter
+{
+       RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //enable gpioA    
+       RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;  // Enable TIM3 Periph clock //?
      
-     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;  // Enable TIM3 Periph clock //?
-     
+     //С детектора фронтов возьмем не инверсный, т.е. активный уровень высокий (для первого и второго входа)
+     TIM3->CCER |= TIM_CCER_CC1P | TIM_CCER_CC2P;//--
+     //Настраиваем второй мультиплексор (для первого и второго входа):
+     TIM3->CCMR1 = TIM_CCMR1_CC1S_0 | TIM_CCMR1_CC2S_0;//--      
+      
     TIM3->PSC = 2; 
     TIM3->ARR = 255;  //RELOAD AFTER ...
+    
    // TIM3->SMCR |= TIM_SMCR_TS_2; //?
+      TIM3->SMCR |= TIM_SMCR_SMS_0 | TIM_SMCR_SMS_1;  /*!<SMS[2:0] bits (Slave mode selection) */ //1 КАНАЛ=+2, 2 КАНАЛА=+4;
+      TIM3->SMCR |= TIM_SMCR_TS_2;// | TIM_SMCR_TS_0; //Select the timer TIx as the trigger input source by writing TS bits in the TIMx_SMCR register
+   // TIM3->SMCR |= TIM_SMCR_ETF_2; //filter
+      
+    TIM3->CR1 |= TIM_CR1_CEN;   // Start count   
     
-    
-      TIM3->SMCR |= TIM_SMCR_SMS_0;// | TIM_SMCR_SMS_1;  /*!<SMS[2:0] bits (Slave mode selection) */
-                                                      //1 КАНАЛ=+2, 2 КАНАЛА=+4;
-      // TIM3->SMCR |= TIM_SMCR_ETF_2; //filter
-       
-   //?  TIM3->CCMR1 |= TIM_CCMR1_CC1S_0;
-   //   TIM3->CCMR2 |= TIM_CCMR2_CC3S_0;
-   //?    TIM3->CCER |= TIM_CCER_CC1P | TIM_CCER_CC2P;
-       
-    //TIM3->DIER |= TIM_DIER_UIE; // Enable tim3 interrupt
-    TIM3->CR1 |= TIM_CR1_CEN;   // Start count    
-    
-    NVIC_EnableIRQ(TIM3_IRQn);  // Enable IRQ 
+    //TIM3->DIER |= TIM_DIER_UIE; // Enable tim3 Update interrupt
+    //NVIC_EnableIRQ(TIM3_IRQn);  // Enable IRQ 
 }
 
-void encoder_init(void){
-//PIN_CONFIGURATION(ENCODER_BUTTON); // кнопка
+void encoder_init(void)
+{  
+PIN_CONFIGURATION(ENCODER_BUTTON); // кнопка
 PIN_CONFIGURATION(ENCODER_CH1);
 PIN_CONFIGURATION(ENCODER_CH2);
 
@@ -627,6 +624,8 @@ char Get_key(void)
   
    // for(char i=0; i<2; i++)
    // {
+  if(key==0)
+{ 
     PIN_ON(OUT_1);  //Hi-Z
     PIN_OFF(OUT_2); //open-drain
     button_port = GPIOC->IDR;
@@ -654,7 +653,7 @@ char Get_key(void)
             break;
             default : key = 0;
      }
-
+}
 if(key==0)
 { 
     PIN_ON(OUT_2);
@@ -692,11 +691,11 @@ if(key==0)
 
  if(key)
  {
-   SPI2->DR = key; //To DM
-   send_to_usart(key); //debug 
+   //SPI2->DR = key; //To DM
+   //send_to_usart(key); //debug OutData
+   return key;
  }; 
- 
-return key;
+return 0;
 }
 
 //////////////
@@ -904,7 +903,8 @@ uint16_t Get_time (void){
 
 
 
-void Usart_init_vs_irq (void){
+void Usart_init_vs_irq (void)
+{
 RCC->AHBENR  |= RCC_AHBENR_GPIOAEN; //тактирование порта
   
     PIN_CONFIGURATION(USART1_TX);
@@ -1006,7 +1006,7 @@ void Spi2_init_vs_irq(void){
   NVIC_EnableIRQ(SPI2_IRQn);
 }
 
-void recieve_from_spi(void) {
+void recieve_from_spi_1(void) {
   while(!(SPI1->SR & SPI_SR_RXNE)); //Ожидаем окончания приема данных модулем SPI1 (RXNE =1 - приемный буфер содержит данные)
   temp = SPI1->DR;//Считываем данные из приемного буфера SPI1. При этой операции происходит очистка буфера и сброс флага RXNE
 }
@@ -1022,7 +1022,7 @@ void spi_exchange(uint8_t send_data)
 {
   SPI2->DR = send_data; //Пишем в буфер передатчика SPI2 
   SPI1->DR = 0x0F; //Пишем в буфер передатчика SPI1. После этого стартует обмен данными
-  recieve_from_spi();
+  recieve_from_spi_1();
 }
 
 void ADC_init(void){
@@ -1297,8 +1297,25 @@ void TIM2_IRQHandler(void)
 
 void TIM3_IRQHandler(void)
 {   
-   TIM3->SR &= ~TIM_SR_UIF; //Clean UIF Flag
- //  send_str_u("Timer3_IRQ!\n");
+  if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+
+    //if (!capture_is_first)
+    //  capture_is_ready = 1;
+
+   // capture_is_first = 0;
+    /* В бите TIM_CR1_DIR регистра TIM3_CR1 хранится
+       направление вращения энкодера, запоминаем его. */
+   // captured_direction = (TIM3->CR1 & TIM_CR1_DIR ? FORWARD : BACKWARD);
+  }
+
+  
+  // TIM3->SR &= ~TIM_SR_UIF; //Clean UIF Flag
+ //  TIM3->SR &= ~TIM_SR_TIF; //Clean TIF Flag
+ //  TIM3->SR &= ~TIM_SR_CC4IF;
+  // TIM3->SR &= ~TIM_SR_CC3IF;
+  // send_str_u("Tim3_IRQ!\n");
 }
 
 //------------------------------------------------------------------------------
@@ -1397,8 +1414,10 @@ void EXTI9_5_IRQHandler(void)
 {
   /* Disable general interrupts */
   disableInterrupts();
-
-    UserButtonHandler();
+  
+  OutData.flags = BTN_PRESSED;
+  OutData.btn_state = 128; //Indicates encoder btn pressed
+    //UserButtonHandler();
 
   EXTI_ClearITPendingBit(EXTI_Line5);
   enableInterrupts();
@@ -1446,9 +1465,11 @@ void SPI1_IRQHandler (void){
 }
 
 
-void SPI2_IRQHandler (void){
- //   send_str_u("SPI2_IRQ");
-  
+void SPI2_IRQHandler (void)
+{
+#ifdef DEBUG  
+    send_str_u("SPI2_IRQ");
+#endif  
   if( SPI2->SR & SPI_SR_RXNE){ // (RXNE =1 - приемный буфер содержит данные))
   
        //  GPIOB->BSRRH |= GPIO_BSRR_BS_6;   //RESet PB6 bit
@@ -1458,7 +1479,7 @@ void SPI2_IRQHandler (void){
    // send_to_usart(temp); //?/??    
     USART1->DR = temp; 
     
-    SPI2->DR = (short)Encoder_curr_pos; //Пишем в буфер передатчика SPI2 
+    SPI2->DR = (short)OutData.encoder_state; //Пишем в буфер передатчика SPI2 ?
    // send_to_usart(Encoder_curr_pos);
     
   }
@@ -1490,5 +1511,64 @@ void ADC1_IRQHandler (void){
 
 
 
+//Мусор
+
+/*
+//Test
+#define   ENCODER_TIM             TIM3
+// Tim clock division is 1, so the FDTS = 72MHz //?
+// Fsample = FDTS/4 = 18MHz, and sample 6 times
+#define   ENC_FILTER              6
+#define   MAX_COUNT               255
+#define   ENCODER_TIM_PERIOD      (MAX_COUNT*3)
+
+ // definitions for the quadrature encoder pins
+
+// Left Motor Channels
+#define ENC_1CH_PIN               GPIO_Pin_7
+#define ENC_2CH_PIN               GPIO_Pin_6
+#define ENC_GPIO_PORT         GPIOA
+#define ENC_GPIO_CLK          RCC_AHB1Periph_GPIOA
+#define ENC_1CH_SOURCE            GPIO_PinSource7
+#define ENC_2CH_SOURCE            GPIO_PinSource6
+#define ENC_AF                GPIO_AF_TIM3
+
+// determine the timers to use
+#define ENC_TIMER_CLK          RCC_APB1Periph_TIM3
+
+#define LEFT_COUNT()            ENCL_TIMER->CNT
+#define RIGHT_COUNT()           ENCR_TIMER->CNT
+void Enc_Init_3ver(void)
+{  
+  GPIO_InitTypeDef GPIO_InitStructure;
+  RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;//RCC_AHB1PeriphClockCmd (ENC_GPIO_CLK, ENABLE);
+  
+   // now configure the pins themselves
+  // they are all going to be inputs with pullups
+  GPIO_StructInit (&GPIO_InitStructure);
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN; //GPIO_PuPd_UP changed for GPIO_PuPd_DOWN
+  GPIO_InitStructure.GPIO_Pin = ENC_1CH_PIN | ENC_2CH_PIN;
+  GPIO_Init (ENC_GPIO_PORT, &GPIO_InitStructure);
+  
+
+  // Connect the pins to their Alternate Functions
+  GPIO_PinAFConfig (ENC_GPIO_PORT, ENC_1CH_SOURCE | ENC_1CH_SOURCE, ENC_AF);
+
+  // Timer peripheral clock enable
+  RCC_APB1PeriphClockCmd (ENC_TIMER_CLK, ENABLE);
+
+  // set them up as encoder inputs
+  // set both inputs to rising polarity to let it use both edges
+  TIM_EncoderInterfaceConfig (ENCODER_TIM, 
+                              TIM_EncoderMode_TI12, 
+                              TIM_ICPolarity_Falling, //Rising
+                              TIM_ICPolarity_Falling);//Rising
+    TIM_SetAutoreload (ENC_TIMER, 0x00ff);
+
+  // turn on the timer/counters
+  TIM_Cmd (ENC_TIMER, ENABLE);
+  //encodersReset();
+}*/
 
 

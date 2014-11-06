@@ -1,5 +1,5 @@
 [DebugChecksum]
-Checksum=-1164561513
+Checksum=-1541140314
 [Exceptions]
 StopOnUncaught=_ 0
 StopOnThrow=_ 0
@@ -54,11 +54,10 @@ Bp0=_ 0 "EMUL_CODE" "{$PROJ_DIR$}.199.4" 0 0 1 "" 0 "" 0
 Bp1=_ 0 "EMUL_CODE" "{$PROJ_DIR$}.199.7" 0 0 1 "" 0 "" 0
 Bp2=_ 0 "EMUL_CODE" "{$PROJ_DIR$}.190.10" 0 0 1 "" 0 "" 0
 Bp3=_ 0 "EMUL_CODE" "{$PROJ_DIR$}.35.3" 0 0 1 "" 0 "" 0
-Bp4=_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.1354.3" 0 0 1 "" 0 "" 0
-Bp5=_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.1351.3" 0 0 1 "" 0 "" 0
-Bp6=_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.637.13" 0 0 1 "" 0 "" 0
-Bp7=_ 1 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.667.13" 0 0 1 "" 0 "" 0
-Count=8
+Bp4=_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.501.1" 0 0 1 "" 0 "" 0
+Bp5=_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.501.1" 0 0 1 "" 0 "" 0
+Bp6=_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\src\main.c}.1102.5" 0 0 1 "" 0 "" 0
+Count=7
 [Log file]
 LoggingEnabled=_ 0
 LogFile=_ ""
@@ -74,7 +73,8 @@ A3=_ "C:\Users\VeHa\Desktop\RDM\STM32_Examples\STM32L_Discovery_Firmware_Pack_V1
 A4=_ "C:\Users\abc\Desktop\RDM_backup_29_10_13\STM32_Examples\(!)STM32L_Discovery_Firmware_Pack_V1.0.2 - подчищеный копия\Projects\AN3413-Current_consumption_touch_sensing\src\main.c" ""
 A5=_ "C:\Users\abc\Desktop\RDM_backup_29_10_13\STM32_Examples\(!)STM32L_Discovery_Firmware_Pack_V1.0.2\Projects\AN3413-Current_consumption_touch_sensing\src\main.c" ""
 A6=_ "C:\Users\abc\Dropbox\WORK\(!)STM32L_preparing_for_2m11\Libraries\STM32L1xx_StdPeriph_Driver\src\stm32l1xx_rcc.c" ""
-Count=7
+A7=_ "C:\Users\veha\Dropbox\WORK\(!)STM32L_preparing_for_2m11\Projects\AN3413-Current_consumption_touch_sensing\src\main.c" ""
+Count=8
 SuppressDialog=1
 [Trace2]
 Enabled=0

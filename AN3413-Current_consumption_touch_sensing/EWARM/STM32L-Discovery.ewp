@@ -1015,6 +1015,24 @@
   <group>
     <name>User</name>
     <file>
+      <name>$PROJ_DIR$\..\src\Cust_Encoder.c</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\..\src\Cust_MatrKeypad.c</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\..\src\CustADC.c</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\..\src\CustGps.cpp</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\..\src\CustI2C.c</name>
+    </file>
+    <file>
+      <name>$PROJ_DIR$\..\src\defines.c</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\..\src\discover_functions.c</name>
     </file>
     <file>
